@@ -169,17 +169,6 @@ JSON Array Returned to Frontend
 User Downloads CSV
 ```
 
----
-
-# 🧑‍💻 My Contribution
-
-In this project, I worked as a **Full-Stack ML Engineer**:
-
-- 💻 Engineered the FastAPI multiprocessing architecture
-- 🧠 Developed the custom NLP and Regex extraction heuristics
-- 🎨 Designed and implemented the modern React + Tailwind UI
-
----
 
 # 👨‍💻 Author
 
