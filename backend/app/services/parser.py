@@ -3,7 +3,7 @@ import zipfile
 from concurrent.futures import ProcessPoolExecutor
 from typing import List, Dict, Any
 from .extractor import process_file
-from .utils import create_temp_dir
+from ..utils import create_temp_dir
 
 def extract_zip(zip_path: str, extract_to: str) -> List[str]:
     """Extracts a zip file and returns a list of file paths."""
