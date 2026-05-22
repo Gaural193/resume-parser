@@ -39,6 +39,21 @@ def extract_text_from_docx(file_path: str) -> str:
         print(f"Error reading DOCX {file_path}: {e}")
         return ""
 
+def clean_name(raw_name: str) -> Optional[str]:
+    if not raw_name:
+        return None
+    # Remove common words that are often mistakenly included
+    bad_words = [r'\bresume\b', r'\bcv\b', r'\bcurriculum vitae\b', r'\bapp\b']
+    clean = raw_name
+    for bw in bad_words:
+        clean = re.sub(bw, '', clean, flags=re.IGNORECASE)
+    
+    # Remove non-alphabetical characters (keeping spaces)
+    clean = re.sub(r'[^a-zA-Z\s]', '', clean)
+    # Condense spaces and strip
+    clean = ' '.join(clean.split()).strip()
+    return clean
+
 def extract_entities(text: str) -> Dict[str, Optional[str]]:
     doc = nlp(text)
     
@@ -48,23 +63,25 @@ def extract_entities(text: str) -> Dict[str, Optional[str]]:
     # Simple heuristics: first PERSON entity is often the name
     for ent in doc.ents:
         if ent.label_ == "PERSON" and not name:
+            candidate = clean_name(ent.text)
             # Basic validation to avoid picking up random words
-            if len(ent.text.split()) >= 2 and len(ent.text) < 50:
-                name = ent.text.strip()
+            if candidate and len(candidate.split()) >= 2 and len(candidate) < 50:
+                name = candidate
         elif ent.label_ == "GPE" and not location:
             location = ent.text.strip()
             
         if name and location:
             break
 
-    # If spacy failed to find a person, we could optionally try first line of text
+    # If spacy failed to find a person, check the first few lines of text
     if not name:
         lines = [line.strip() for line in text.split('\n') if line.strip()]
-        if lines:
-            # Often the first non-empty line is the name
-            potential_name = lines[0]
-            if 2 <= len(potential_name.split()) <= 4 and len(potential_name) < 50:
-                 name = potential_name
+        # Check up to the first 3 lines
+        for i in range(min(3, len(lines))):
+            candidate = clean_name(lines[i])
+            if candidate and 2 <= len(candidate.split()) <= 4 and len(candidate) < 50:
+                name = candidate
+                break
 
     # Extract Email
     email_match = re.search(EMAIL_REGEX, text)
