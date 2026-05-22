@@ -39,14 +39,20 @@ def extract_text_from_docx(file_path: str) -> str:
         print(f"Error reading DOCX {file_path}: {e}")
         return ""
 
+# Pre-compile the regex for performance
+BAD_WORDS_PATTERN = re.compile(
+    r'\b(?:resume|cv|curriculum vitae|app|deep learning|machine learning|data|scientist|'
+    r'software|engineer|developer|python|jupyter|notebook|project|github|linkedin|'
+    r'education|experience|skills)\b',
+    flags=re.IGNORECASE
+)
+
 def clean_name(raw_name: str) -> Optional[str]:
     if not raw_name:
         return None
-    # Remove common words that are often mistakenly included
-    bad_words = [r'\bresume\b', r'\bcv\b', r'\bcurriculum vitae\b', r'\bapp\b']
-    clean = raw_name
-    for bw in bad_words:
-        clean = re.sub(bw, '', clean, flags=re.IGNORECASE)
+    
+    # Use the pre-compiled regex (much faster than a loop)
+    clean = BAD_WORDS_PATTERN.sub('', raw_name)
     
     # Remove non-alphabetical characters (keeping spaces)
     clean = re.sub(r'[^a-zA-Z\s]', '', clean)
@@ -54,38 +60,71 @@ def clean_name(raw_name: str) -> Optional[str]:
     clean = ' '.join(clean.split()).strip()
     return clean
 
+def extract_name_from_email_heuristic(email: str, text: str) -> Optional[str]:
+    if not email:
+        return None
+    prefix = email.split('@')[0].lower()
+    # Remove numbers from prefix for matching
+    prefix = re.sub(r'[0-9]', '', prefix)
+    prefix_chars = set(prefix)
+    if not prefix_chars:
+        return None
+        
+    lines = [line.strip() for line in text.split('\n') if line.strip()]
+    best_line = None
+    best_score = 0.0
+    
+    for line in lines[:15]: # check first 15 lines
+        clean_l = clean_name(line)
+        if not clean_l:
+            continue
+        words = clean_l.split()
+        if not (1 <= len(words) <= 4):
+            continue
+            
+        line_chars_str = clean_l.lower().replace(" ", "")
+        line_chars = set(line_chars_str)
+        if not line_chars:
+            continue
+            
+        # Calculate character overlap
+        match_count = sum(1 for c in line_chars_str if c in prefix)
+        score = match_count / len(line_chars_str)
+        
+        # If the line strongly matches the email prefix characters
+        if score > best_score and score > 0.7: 
+            best_score = score
+            best_line = clean_l
+            
+    return best_line
+
 def extract_entities(text: str) -> Dict[str, Optional[str]]:
     doc = nlp(text)
     
     name = None
     location = None
     
-    # Simple heuristics: first PERSON entity is often the name
-    for ent in doc.ents:
-        if ent.label_ == "PERSON" and not name:
-            candidate = clean_name(ent.text)
-            # Basic validation to avoid picking up random words
-            if candidate and len(candidate.split()) >= 2 and len(candidate) < 50:
-                name = candidate
-        elif ent.label_ == "GPE" and not location:
-            location = ent.text.strip()
-            
-        if name and location:
-            break
-
-    # If spacy failed to find a person, check the first few lines of text
-    if not name:
-        lines = [line.strip() for line in text.split('\n') if line.strip()]
-        # Check up to the first 3 lines
-        for i in range(min(3, len(lines))):
-            candidate = clean_name(lines[i])
-            if candidate and 2 <= len(candidate.split()) <= 4 and len(candidate) < 50:
-                name = candidate
-                break
-
-    # Extract Email
+    # Extract Email first to use as a heuristic for Name
     email_match = re.search(EMAIL_REGEX, text)
     email = email_match.group(0) if email_match else None
+
+    # Try Email Heuristic first (Highly accurate for resumes)
+    name = extract_name_from_email_heuristic(email, text)
+    
+    # Fallback to Spacy PERSON
+    if not name:
+        for ent in doc.ents:
+            if ent.label_ == "PERSON":
+                candidate = clean_name(ent.text)
+                if candidate and len(candidate.split()) >= 2 and len(candidate) < 50:
+                    name = candidate
+                    break
+
+    # Extract Location
+    for ent in doc.ents:
+        if ent.label_ == "GPE" and not location:
+            location = ent.text.strip()
+            break
 
     # Extract Phone
     phone_match = re.search(PHONE_REGEX, text)

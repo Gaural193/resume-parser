@@ -20,28 +20,28 @@ def extract_zip(zip_path: str, extract_to: str) -> List[str]:
         print(f"Error extracting ZIP: {e}")
     return extracted_files
 
+# Global executor to keep workers alive and prevent reloading SpaCy on every request
+_executor = ProcessPoolExecutor(max_workers=4)
+
 def process_files_concurrently(file_paths: List[str]) -> List[Dict[str, Any]]:
-    """Process a list of files concurrently using ProcessPoolExecutor."""
+    """Process a list of files concurrently using the global ProcessPoolExecutor."""
     results = []
     
-    # ProcessPoolExecutor is better for CPU-bound tasks like parsing/NLP
-    # Limit max_workers to avoid overloading memory if many large PDFs
-    with ProcessPoolExecutor(max_workers=4) as executor:
-        # submit tasks
-        futures = []
-        for file_path in file_paths:
-            original_filename = os.path.basename(file_path)
-            futures.append(executor.submit(process_file, file_path, original_filename))
-            
-        for future in futures:
-            try:
-                results.append(future.result())
-            except Exception as e:
-                # Capture unhandled exception during processing
-                results.append({
-                    "file_name": "unknown",
-                    "error": str(e)
-                })
+    # submit tasks
+    futures = []
+    for file_path in file_paths:
+        original_filename = os.path.basename(file_path)
+        futures.append(_executor.submit(process_file, file_path, original_filename))
+        
+    for future in futures:
+        try:
+            results.append(future.result())
+        except Exception as e:
+            # Capture unhandled exception during processing
+            results.append({
+                "file_name": "unknown",
+                "error": str(e)
+            })
                 
     return results
 

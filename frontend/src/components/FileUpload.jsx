@@ -15,6 +15,8 @@ export default function FileUpload({ onFilesSelected, isUploading }) {
     // Accept standard document types + zip
     accept: {
       'application/zip': ['.zip'],
+      'application/x-zip-compressed': ['.zip'],
+      'application/x-zip': ['.zip'],
       'application/pdf': ['.pdf'],
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx']
     }
@@ -37,7 +39,12 @@ export default function FileUpload({ onFilesSelected, isUploading }) {
             webkitdirectory="true" 
             className="hidden" 
             id="folder-upload" 
-            onChange={(e) => onFilesSelected(Array.from(e.target.files))}
+            onChange={(e) => {
+                if (e.target.files.length > 0) {
+                    onFilesSelected(Array.from(e.target.files));
+                }
+                e.target.value = null;
+            }}
             disabled={isUploading}
         />
         
